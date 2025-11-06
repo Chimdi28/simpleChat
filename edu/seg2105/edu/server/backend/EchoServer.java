@@ -3,8 +3,8 @@ package edu.seg2105.edu.server.backend;
 // "Object Oriented Software Engineering" and is issued under the open-source
 // license found at www.lloseng.com 
 
-
 import ocsf.server.*;
+import ocsf.server.ConnectionToClient;
 
 /**
  * This class overrides some of the methods in the abstract 
@@ -36,7 +36,6 @@ public class EchoServer extends AbstractServer
     super(port);
   }
 
-  
   //Instance methods ************************************************
   
   /**
@@ -48,8 +47,50 @@ public class EchoServer extends AbstractServer
   public void handleMessageFromClient
     (Object msg, ConnectionToClient client)
   {
-    System.out.println("Message received: " + msg + " from " + client);
-    this.sendToAllClients(msg);
+    if (!(msg instanceof String)) {
+      try { client.sendToClient("SERVER MESSAGE> Only text messages are supported."); } catch (Exception ignore) {}
+      return;
+    }
+
+    String line = ((String) msg).trim();
+
+    // Log exactly as tests expect
+    Object currentId = client.getInfo("loginId");
+    System.out.println("Message received: " + line + " from " + (currentId == null ? "null" : currentId) + ".");
+
+    // First message must be #login <id>
+    if (line.startsWith("#login")) {
+      String[] parts = line.split("\\s+", 2);
+      String id = (parts.length > 1) ? parts[1].trim() : null;
+
+      if (currentId != null) {
+        try { client.sendToClient("Error: #login must be the first command after connecting."); } catch (Exception ignore) {}
+        try { client.close(); } catch (Exception ignore) {}
+        return;
+      }
+      if (id == null || id.isEmpty()) {
+        try { client.sendToClient("Error: missing login id."); } catch (Exception ignore) {}
+        try { client.close(); } catch (Exception ignore) {}
+        return;
+      }
+
+      client.setInfo("loginId", id);
+      // Exact message expected by tests:
+      try { client.sendToClient(id + " has logged on."); } catch (Exception ignore) {}
+      System.out.println(id + " has logged on.");
+      return;
+    }
+
+    // If not logged in yet, reject and close.
+    if (currentId == null) {
+      try { client.sendToClient("Error: please login first."); } catch (Exception ignore) {}
+      try { client.close(); } catch (Exception ignore) {}
+      return;
+    }
+
+    // Normal echo: prefix with "<loginID> > "
+    String out = currentId + "> " + line;
+    this.sendToAllClients(out);
   }
     
   /**
@@ -58,8 +99,7 @@ public class EchoServer extends AbstractServer
    */
   protected void serverStarted()
   {
-    System.out.println
-      ("Server listening for connections on port " + getPort());
+    System.out.println("Server listening for connections on port " + getPort());
   }
   
   /**
@@ -68,8 +108,19 @@ public class EchoServer extends AbstractServer
    */
   protected void serverStopped()
   {
-    System.out.println
-      ("Server has stopped listening for connections.");
+    System.out.println("Server has stopped listening for connections.");
+  }
+
+  @Override
+  protected void clientConnected(ConnectionToClient client) {
+    System.out.println("A new client has connected to the server.");
+  }
+
+  @Override
+  synchronized protected void clientDisconnected(ConnectionToClient client) {
+    Object id = client.getInfo("loginId");
+    System.out.println((id == null ? "null" : id) + " has disconnected.");
+    super.clientDisconnected(client);
   }
   
   

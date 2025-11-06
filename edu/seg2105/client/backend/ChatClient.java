@@ -28,7 +28,11 @@ public class ChatClient extends AbstractClient
    */
   ChatIF clientUI; 
 
-  
+  /**
+   * Login id for this client (required by tests).
+   */
+  private String loginId;
+
   //Constructors ****************************************************
   
   /**
@@ -38,7 +42,6 @@ public class ChatClient extends AbstractClient
    * @param port The port number to connect on.
    * @param clientUI The interface type variable.
    */
-  
   public ChatClient(String host, int port, ChatIF clientUI) 
     throws IOException 
   {
@@ -47,7 +50,18 @@ public class ChatClient extends AbstractClient
     openConnection();
   }
 
-  
+  /**
+   * Overloaded constructor used when we want to login after connecting.
+   * (ClientConsole passes loginId.)
+   */
+  public ChatClient(String host, int port, ChatIF clientUI, String loginId)
+    throws IOException
+  {
+    super(host, port);
+    this.clientUI = clientUI;
+    this.loginId = loginId;
+  }
+
   //Instance methods ************************************************
     
   /**
@@ -58,8 +72,6 @@ public class ChatClient extends AbstractClient
   public void handleMessageFromServer(Object msg) 
   {
     clientUI.display(msg.toString());
-    
-    
   }
 
   /**
@@ -93,5 +105,33 @@ public class ChatClient extends AbstractClient
     catch(IOException e) {}
     System.exit(0);
   }
+
+  /* ===== Test-case aligned behavior ===== */
+
+  @Override
+  protected void connectionEstablished() {
+    // Auto-login so server can print "<loginID> has logged on."
+    if (loginId != null && !loginId.isEmpty()) {
+      try { sendToServer("#login " + loginId); }
+      catch (IOException e) { clientUI.display("Could not login: " + e.getMessage()); }
+    }
+  }
+
+  @Override
+  protected void connectionClosed() {
+    // Keep quiet here; client console prints "Connection closed." for #logoff.
+  }
+
+  @Override
+  protected void connectionException(Exception exception) {
+    // When server closes while connected, show exact message expected by tests.
+    clientUI.display("The server has shut down.");
+    System.exit(0);
+  }
+
+  // Helpers:
+  public boolean isConnectedSafe() { try { return isConnected(); } catch (Exception e) { return false; } }
+  public void setLoginId(String id) { this.loginId = id; }
+  public String getLoginId() { return this.loginId; }
 }
 //End of ChatClient class
